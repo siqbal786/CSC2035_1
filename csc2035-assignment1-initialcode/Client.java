@@ -1,8 +1,6 @@
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.net.*;
+import java.sql.SQLOutput;
 import java.util.Scanner;
 
 public class Client {
@@ -156,7 +154,7 @@ public class Client {
 		socket = new DatagramSocket();
 		socket.send(sentPacket);
 
-		System.out.println("metadata is sent");
+		System.out.println("metadata is sent " + fileName + fileSize + outputFile);
 
 
 		//exitErr("sendMetaData is not implemented");
@@ -164,15 +162,148 @@ public class Client {
 
 
 	/* TODO: Send the file to the server without corruption*/
-	public void sendFileNormal(int portNumber, InetAddress IPAddress, File file) {
-		exitErr("sendFileNormal is not implemented");
-	} 
+	public void sendFileNormal(int portNumber, InetAddress IPAddress, File file) throws IOException {
+
+		try {
+			//Creates a datagramSocket and binds it to any available port on local machine
+			socket = new DatagramSocket();
+		} catch (SocketException e) {
+			System.err.println("the socket could not be opened, or the socket could not bind to the specified port " +
+					portNumber);
+			System.exit(1);
+		}
+
+		int segmentSize = 4;
+		byte[] buffer = new byte [segmentSize];
+		int bytesRead;
+		int sequenceNumber = 0;
+
+		FileInputStream fileInputStream = new FileInputStream(file);
+
+		while ((bytesRead = fileInputStream.read(buffer)) != -1) {
+			byte[] payload = new byte[bytesRead];
+			System.arraycopy(buffer, 0, payload, 0, bytesRead);
+			int checksum = checksum(new String (payload), false);
+
+			Segment segment = new Segment();
+			segment.setSize(bytesRead);
+			segment.setChecksum(checksum);
+			segment.setSq(sequenceNumber);
+			segment.setType(SegmentType.Data);
+			segment.setPayLoad(new String (payload));
+
+			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+			ObjectOutputStream objectStream = new ObjectOutputStream(outputStream);
+			objectStream.writeObject(segment);
+			byte[] data = outputStream.toByteArray();
+
+			DatagramPacket packet = new DatagramPacket(data, data.length, IPAddress, portNumber);
+			socket.send(packet);
+			System.out.println("sending segment " + bytesRead + checksum + sequenceNumber + SegmentType.Data + payload);
+			System.out.println("Waiting for an Ack");
+
+			sequenceNumber++;
+
+			byte[] ackBuffer = new byte[1];
+			DatagramPacket ackPacket = new DatagramPacket(ackBuffer, ackBuffer.length);
+			socket.receive(ackPacket);
+			System.out.println("Ack sq " + sequenceNumber + "RECEIVED.");
+
+			buffer = new byte[segmentSize];
+		}
+
+		System.out.println("total segments sent: " + sequenceNumber);
+		System.out.println("File sent successfully.");
+
+	}
+
+	//exitErr("sendFileNormal is not implemented");
+
 
 	/* TODO: This function is essentially the same as the sendFileNormal function
 	 *      except that it resends data segments if no ACK for a segment is 
 	 *      received from the server.*/
 	public void sendFileWithTimeOut(int portNumber, InetAddress IPAddress, File file, float loss) {
-		exitErr("sendFileWithTimeOut is not implemented");
+
+		try {
+			//Creates a datagramSocket and binds it to any available port on local machine
+			socket = new DatagramSocket();
+		} catch (SocketException e) {
+			System.err.println("the socket could not be opened, or the socket could not bind to the specified port " +
+					portNumber);
+			System.exit(1);
+		}
+
+		int segmentSize = 4;
+		byte[] buffer = new byte [segmentSize];
+		int bytesRead;
+		int sequenceNumber = 0;
+
+		FileInputStream fileInputStream;
+		try {
+			fileInputStream = new FileInputStream(file);
+		} catch (FileNotFoundException e) {
+			System.err.println("File not found: " + file.getAbsolutePath());
+			socket.close();
+			return;
+		}
+
+		while (true) {
+			try {
+				bytesRead = fileInputStream.read(buffer);
+				if (bytesRead == -1)
+				{
+					break;
+				}
+
+				byte[] payload = new byte[bytesRead];
+				System.arraycopy(buffer, 0, payload, 0, bytesRead);
+				int checksum = checksum(new String(payload), false);
+
+				Segment segment = new Segment();
+				segment.setSize(bytesRead);
+				segment.setChecksum(checksum);
+				segment.setSq(sequenceNumber);
+				segment.setType(SegmentType.Data);
+				segment.setPayLoad(new String(payload));
+
+				ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+				ObjectOutputStream objectStream = new ObjectOutputStream(outputStream);
+				objectStream.writeObject(segment);
+				byte[] data = outputStream.toByteArray();
+
+				DatagramPacket packet = new DatagramPacket(data, data.length, IPAddress, portNumber);
+				socket.send(packet);
+				System.out.println("sending segment " + bytesRead + checksum + sequenceNumber + SegmentType.Data + payload);
+				System.out.println("Waiting for an Ack");
+
+
+				byte[] ackBuffer = new byte[1];
+				DatagramPacket ackPacket = new DatagramPacket(ackBuffer, ackBuffer.length);
+				System.out.println("Ack sq " + sequenceNumber + "RECEIVED.");
+
+
+
+				try {
+					socket.receive(ackPacket);
+					socket.setSoTimeout(0);
+				} catch (SocketTimeoutException ste) {
+					System.out.println("Timeout - resending segment " + sequenceNumber);
+					continue;
+				}
+
+				sequenceNumber++;
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		System.out.println("total segments sent: " + sequenceNumber);
+		System.out.println("File sent successfully.");
+
+		socket.close();
+
+
+		//exitErr("sendFileWithTimeOut is not implemented");
 	} 
 
 
