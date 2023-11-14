@@ -1,6 +1,7 @@
 import java.io.*;
 import java.net.*;
 import java.sql.SQLOutput;
+import java.util.Arrays;
 import java.util.Scanner;
 
 public class Client {
@@ -199,7 +200,7 @@ public class Client {
 
 			DatagramPacket packet = new DatagramPacket(data, data.length, IPAddress, portNumber);
 			socket.send(packet);
-			System.out.println("sending segment " + bytesRead + checksum + sequenceNumber + SegmentType.Data + payload);
+			System.out.println("sending segment " + bytesRead + checksum + sequenceNumber + SegmentType.Data + segment.getPayLoad());
 			System.out.println("Waiting for an Ack");
 
 			sequenceNumber++;
@@ -258,7 +259,7 @@ public class Client {
 
 				byte[] payload = new byte[bytesRead];
 				System.arraycopy(buffer, 0, payload, 0, bytesRead);
-				int checksum = checksum(new String(payload), false);
+				int checksum = checksum(new String(payload), isCorrupted(loss));
 
 				Segment segment = new Segment();
 				segment.setSize(bytesRead);
@@ -274,19 +275,20 @@ public class Client {
 
 				DatagramPacket packet = new DatagramPacket(data, data.length, IPAddress, portNumber);
 				socket.send(packet);
-				System.out.println("sending segment " + bytesRead + checksum + sequenceNumber + SegmentType.Data + payload);
+				System.out.println("sending segment " + bytesRead + checksum + sequenceNumber + SegmentType.Data + segment.getPayLoad());
 				System.out.println("Waiting for an Ack");
 
 
 				byte[] ackBuffer = new byte[1];
 				DatagramPacket ackPacket = new DatagramPacket(ackBuffer, ackBuffer.length);
-				System.out.println("Ack sq " + sequenceNumber + "RECEIVED.");
 
 
 
 				try {
+					socket.setSoTimeout(1000);
 					socket.receive(ackPacket);
-					socket.setSoTimeout(0);
+					System.out.println("Ack sq " + sequenceNumber + "RECEIVED.");
+
 				} catch (SocketTimeoutException ste) {
 					System.out.println("Timeout - resending segment " + sequenceNumber);
 					continue;
