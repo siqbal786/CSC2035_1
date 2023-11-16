@@ -294,7 +294,12 @@ public class Client {
 					continue;
 				}
 
-				sequenceNumber++;
+
+				if (sequenceNumber == 1) {
+					sequenceNumber = 0;
+				} else {
+					sequenceNumber = 1;
+				}
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
